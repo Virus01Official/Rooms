@@ -29,7 +29,7 @@ var room_scenes: Array[PackedScene] = [
 ]
 
 var specialRooms = {
-	#"Room 50" = preload("res://rooms/room_50.tscn"),
+	"Room 50" = preload("res://rooms/room_50.tscn"),
 	#"Room 90" = preload("res://rooms/room_90.tscn"),
 	#"Room 30" = preload('res://rooms/room_30.tscn'),
 }
@@ -64,16 +64,15 @@ var room_variants := [
 	 },
 ]
 
-# Track active variant state
 var active_variant: Dictionary = {}
 var variant_rooms_remaining := 0
-var spawned_variants: Array[String] = []  # Track which variants have already spawned
+var spawned_variants: Array[String] = []
 
 var spawned_secret_rooms: Array[PackedScene] = []
 
 var all_available_rooms: Array[PackedScene] = []
 
-var MAX_ROOMS = 5
+const MAX_ROOMS = 5
 
 var roomNum = 1
 
@@ -123,10 +122,8 @@ func _ready():
 func _initialize_room_pool():
 	all_available_rooms.clear()
 	
-	# Start with vanilla rooms
 	all_available_rooms.append_array(room_scenes)
 	
-	# Add modded rooms if mod loader exists
 	if mod_loader:
 		var modded_rooms = mod_loader.get_all_room_scenes()
 		all_available_rooms.append_array(modded_rooms)
@@ -135,7 +132,6 @@ func _initialize_room_pool():
 			print("[MODDING] Added ", modded_rooms.size(), " modded rooms to pool")
 			print("[MODDING] Total rooms available: ", all_available_rooms.size())
 	
-	# Add modded monsters
 	if mod_loader:
 		var modded_monsters = mod_loader.get_all_monster_scenes()
 		RushMonsters.append_array(modded_monsters)
@@ -148,11 +144,9 @@ func _on_mods_loaded():
 	_initialize_room_pool()
 
 func _process(delta):
-	# Only server handles stalker spawning logic
 	if not multiplayer.is_server():
 		return
 	
-	# Check for stalker spawn conditions
 	if roomNum >= STALKER_START_ROOM:
 		time_since_stalker_check += delta
 		
@@ -164,32 +158,27 @@ func _process(delta):
 		LIGHT_BREAK_CHANCE = 1
 
 func check_stalker_spawn():
-	# Don't spawn if stalker already exists
 	if active_stalker != null and is_instance_valid(active_stalker):
-		player_not_looking_back_time = 0.0  # Reset timer
+		player_not_looking_back_time = 0.0
 		return
 	
-	# Find player
 	var players = get_tree().get_nodes_in_group("player")
 	if players.is_empty():
 		return
 	
-	var player = players[0]  # Get first player for simplicity
+	var player = players[0]
 	
-	# Check if player is looking backwards
 	if is_player_looking_backward(player):
 		player_not_looking_back_time = 0.0
 	else:
 		player_not_looking_back_time += STALKER_CHECK_INTERVAL
 	
-	# Spawn stalker if player hasn't looked back for long enough
 	if player_not_looking_back_time >= STALKER_NO_LOOK_DURATION:
 		if seeded_randf() <= STALKER_SPAWN_CHANCE:
 			spawn_stalker_monster(player)
 			player_not_looking_back_time = 0.0
 
 func is_player_looking_backward(player: Node) -> bool:
-	# Get player's camera/head node
 	var player_head = null
 	if player.has_node("Head"):
 		player_head = player.get_node("Head")
@@ -198,15 +187,10 @@ func is_player_looking_backward(player: Node) -> bool:
 	else:
 		return false
 	
-	# Get player's forward direction
 	var player_forward = -player_head.global_transform.basis.z.normalized()
 	
-	# Get player's movement direction (simplified - checking if looking opposite to forward progress)
-	# A more sophisticated check would track actual room progression
-	var backward_threshold = -0.5  # Looking more than 90 degrees backwards
+	var backward_threshold = -0.5
 	
-	# For simplicity, we check if player's look direction has negative Z component
-	# (assuming rooms progress in +Z direction)
 	return player_forward.z < backward_threshold
 
 func spawn_stalker_monster(player: Node):
@@ -228,13 +212,12 @@ func spawn_stalker_monster(player: Node):
 	
 	print("Stalker monster spawned behind player!")
 	
-	# Sync stalker spawn to clients
 	rpc("sync_stalker_spawn", spawn_pos)
 
 @rpc("authority", "call_local", "reliable")
 func sync_stalker_spawn(spawn_position: Vector3):
 	if multiplayer.is_server():
-		return  # Server already spawned it
+		return
 	
 	var stalker = STALKER_MONSTER_SCENE.instantiate()
 	add_child(stalker)
@@ -254,33 +237,27 @@ func seeded_randf_range(min_val: float, max_val: float) -> float:
 
 func check_and_activate_variant():
 	"""Check if we should start a new variant sequence"""
-	# Don't activate if we're already in a variant
 	if variant_rooms_remaining > 0:
 		return
 	
-	# Check each variant's spawn chance
 	for variant in room_variants:
 		var variant_name: String = variant.get("name", "Unknown")
 		
-		# Skip if this variant has already spawned
 		if spawned_variants.has(variant_name):
 			continue
 		
 		var spawn_chance: float = variant.get("spawn_chance", 0.1)
 		
-		# Roll for spawn
 		if seeded_randf() <= spawn_chance:
-			# Activate this variant!
 			active_variant = variant
 			var min_rooms: int = variant.get("min_rooms", 3)
 			var max_rooms: int = variant.get("max_rooms", 6)
 			variant_rooms_remaining = rng.randi_range(min_rooms, max_rooms)
 			
-			# Mark this variant as spawned
 			spawned_variants.append(variant_name)
 			
 			print("VARIANT ACTIVATED: ", variant_name, " for ", variant_rooms_remaining, " rooms")
-			break  # Only activate one variant at a time
+			break
 
 func get_variant_room() -> PackedScene:
 	"""Get a room from the active variant"""
@@ -330,7 +307,6 @@ func roll_secret_room_for_door(_door_number: int) -> PackedScene:
 	return null
 	
 func generate_room(previous_room):
-	# Only server generates rooms
 	if not multiplayer.is_server():
 		return
 		
@@ -347,7 +323,6 @@ func generate_room(previous_room):
 	
 	add_child(new_room)
 	
-	# Get where the previous room ends
 	var prev_end_pos = previous_room.get_node("End_Pos") as MeshInstance3D
 	
 	new_room.global_transform.basis = prev_end_pos.global_transform.basis
@@ -370,7 +345,6 @@ func generate_room(previous_room):
 
 	rooms_since_last_rush += 1
 
-	# Check if this room has a wardrobe
 	if room_has_wardrobe(new_room):
 		has_seen_wardrobe = true
 
@@ -384,61 +358,51 @@ func generate_room(previous_room):
 						
 	update_rush_target()
 	
-	# Sync room generation to all clients
 	var scene_index = get_room_scene_index(room_scene)
 	var prev_room_path = get_path_to(previous_room)
 	rpc("sync_room_generation", scene_index, prev_room_path, next_door_number)
 
-# MOD SUPPORT: Updated to handle larger room pools + variants
 func get_room_scene_index(scene: PackedScene) -> int:
-	# Check variant rooms first (offset by 30000)
 	var variant_index = 30000
 	for variant in room_variants:
 		var variant_rooms: Array = variant.get("rooms", [])
 		for i in range(variant_rooms.size()):
 			if variant_rooms[i] == scene:
 				return variant_index + i
-		variant_index += 100  # Leave space between variants
+		variant_index += 100
 	
-	# Check combined room pool (vanilla + modded)
 	for i in range(all_available_rooms.size()):
 		if all_available_rooms[i] == scene:
 			return i
 	
-	# Check special rooms (offset by 10000)
 	var special_index = 10000
 	for key in specialRooms.keys():
 		if specialRooms[key] == scene:
 			return special_index
 		special_index += 1
 	
-	# Check secret rooms (offset by 20000)
 	var secret_index = 20000
 	for entry in secret_rooms:
 		if entry["scene"] == scene:
 			return secret_index
 		secret_index += 1
 	
-	return 0  # Default to first room
+	return 0
 
 func get_scene_from_index(index: int) -> PackedScene:
 	if index < 10000:
-		# Normal or modded room from combined pool
 		if index < all_available_rooms.size():
 			return all_available_rooms[index]
 	elif index < 20000:
-		# Special room
 		var special_index = index - 10000
 		var keys = specialRooms.keys()
 		if special_index < keys.size():
 			return specialRooms[keys[special_index]]
 	elif index < 30000:
-		# Secret room
 		var secret_index = index - 20000
 		if secret_index < secret_rooms.size():
 			return secret_rooms[secret_index]["scene"]
 	else:
-		# Variant room
 		var variant_offset = index - 30000
 		var current_offset = 0
 		
@@ -450,16 +414,15 @@ func get_scene_from_index(index: int) -> PackedScene:
 				var room_index = variant_offset - current_offset
 				return variant_rooms[room_index]
 			
-			current_offset += 100  # Match the spacing from get_room_scene_index
+			current_offset += 100
 	
-	# Fallback to first available room
 	return all_available_rooms[0] if not all_available_rooms.is_empty() else room_scenes[0]
 
 @rpc("authority", "call_local", "reliable")
 func sync_room_generation(scene_index: int, prev_room_path: NodePath, _door_number: int):
-	# Clients receive and generate the same room
+	
 	if multiplayer.is_server():
-		return  # Server already generated it
+		return
 		
 	var room_scene = get_scene_from_index(scene_index)
 	var previous_room = get_node_or_null(prev_room_path)
@@ -474,7 +437,6 @@ func sync_room_generation(scene_index: int, prev_room_path: NodePath, _door_numb
 	
 	add_child(new_room)
 	
-	# Get where the previous room ends
 	var prev_end_pos = previous_room.get_node("End_Pos") as MeshInstance3D
 	
 	new_room.global_transform.basis = prev_end_pos.global_transform.basis
@@ -515,20 +477,17 @@ func maybe_make_room_locked(room: Node):
 
 	var door = room.get_node("DoorSpawn").get_node("door")
 
-	# Mark door as locked 
 	door.locked = true
 
-	# Spawn key for this room
 	spawn_key_for_room(room)
 	
-	# Sync locked door state to clients
 	var door_path = get_path_to(door)
 	rpc("sync_door_locked", door_path)
 
 @rpc("authority", "call_local", "reliable")
 func sync_door_locked(door_path: NodePath):
 	if multiplayer.is_server():
-		return  # Server already set it
+		return
 		
 	var door = get_node_or_null(door_path)
 	if door and is_instance_valid(door):
@@ -546,14 +505,14 @@ func spawn_key_for_room(room: Node):
 	var key = KEY_SCENE.instantiate()
 	add_child(key)
 
-	key.global_position = point.global_position  # ← use global_position on both
+	key.global_position = point.global_position
 	
 	rpc("sync_key_spawn", key.global_position)
 
 @rpc("authority", "call_local", "reliable")
 func sync_key_spawn(key_position: Vector3):
 	if multiplayer.is_server():
-		return  # Server already spawned it
+		return
 		
 	var key = KEY_SCENE.instantiate()
 	add_child(key)
@@ -596,7 +555,6 @@ func flicker_n_times_then_break(light: Light3D, count: int, interval: float):
 
 func roll_secret_room() -> PackedScene:
 	for entry in secret_rooms:
-		# Skip if this secret room has already been spawned
 		if spawned_secret_rooms.has(entry["scene"]):
 			continue
 			
@@ -663,13 +621,12 @@ func flicker_lights_rush():
 	for light in lights:
 		flicker_for_time_then_break(light, RUSH_FLICKER_TIME, RUSH_FLICKER_INTERVAL)
 	
-	# Sync light flickering to clients
 	rpc("sync_flicker_lights_rush")
 
 @rpc("authority", "call_local", "reliable")
 func sync_flicker_lights_rush():
 	if multiplayer.is_server():
-		return  # Server already did it
+		return
 		
 	var lights := get_all_lights()
 	for light in lights:
