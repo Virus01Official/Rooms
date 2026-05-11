@@ -20,7 +20,6 @@ var max_health := 100
 
 var being_killed := false
 var is_crouching := false
-var is_sprinting := false
 var hidden := false
 var teleporting := false
 var CrucifixHeld := false
@@ -195,14 +194,9 @@ func _handle_gravity(delta: float) -> void:
 func _handle_crouch_sprint(delta: float) -> void:
 	if Input.is_action_pressed("crouch"):
 		is_crouching = true
-		is_sprinting = false
 		SPEED = CROUCH_SPEED
-	elif Input.is_action_pressed("sprint") and not is_crouching:
-		is_sprinting = true
-		SPEED = SPRINT_SPEED
 	else:
 		is_crouching = false
-		is_sprinting = false
 		SPEED = DEFAULT_SPEED
 
 func _handle_wardrobe_timer(delta: float) -> void:
