@@ -19,16 +19,18 @@ background_mode = 1
 background_color = Color(0.024119176, 0.03324597, 0.061092943, 1)
 sky = SubResource("Sky_7jktm")
 ambient_light_source = 1
-ambient_light_energy = 0.0
 tonemap_mode = 4
+ssr_enabled = true
 sdfgi_use_occlusion = true
 glow_enabled = true
 glow_intensity = 0.4
 glow_strength = 0.6
+glow_bloom = 0.5
 volumetric_fog_enabled = true
 volumetric_fog_albedo = Color(0.08468998, 0.08468991, 0.08468992, 1)
 volumetric_fog_anisotropy = 0.8
 adjustment_enabled = true
+adjustment_brightness = 0.7
 
 [node name="Game" type="Node3D" unique_id=390072711]
 

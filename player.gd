@@ -576,7 +576,6 @@ func _interact_item(collider: Area3D) -> void:
 			rpc("sync_item_pickup", get_path_to(collider.get_parent()))
 			if i == selected_slot:
 				update_held_item()
-			print("Picked up: %s in slot %d" % [item_name, i + 1])
 			return
 
 @rpc("any_peer", "call_local", "reliable")
